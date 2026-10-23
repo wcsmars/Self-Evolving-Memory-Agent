@@ -1,5 +1,6 @@
 import argparse
 import json
+import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -8,7 +9,7 @@ from .demo import seed_demo
 from .evolution import EvolutionEngine
 from .ingest import ingest
 from .retrieval import Retriever
-from .store import Store
+from .store import Store, not_found_message
 
 
 def parser():
@@ -120,7 +121,10 @@ def main(argv=None):
         return 0
     except KeyboardInterrupt:
         return 0
-    except (ValueError, KeyError, RuntimeError, OSError) as exc:
+    except KeyError as exc:
+        print("Error: {}".format(not_found_message(exc)), file=sys.stderr)
+        return 1
+    except (ValueError, RuntimeError, OSError, sqlite3.Error) as exc:
         print("Error: {}".format(exc), file=sys.stderr)
         return 1
 

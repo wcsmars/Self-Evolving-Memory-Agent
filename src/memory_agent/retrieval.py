@@ -22,13 +22,20 @@ import uuid
 from .store import normalize_time, utcnow
 
 
+# Function words and question scaffolding only. Words that can carry meaning
+# in a memory ("US", "IT", "Will", "memory") are deliberately kept.
 _STOPWORDS = frozenset(
-    "a an and are as at be been being but by can could did do does for from had "
-    "has have how i if in into is it its me my of on or our please should so "
-    "tell than that the their them then there these they this those to us was "
-    "we were what when where which who why will with would you your about "
-    "any all know show give find recall remember memory memories".split()
+    "a an and are as at be been being but by could did do does for from had "
+    "has have how i if in into is its me my of on or our please should so "
+    "tell than that the their them then there these they this those to was "
+    "we were what when where which who why with would you your about "
+    "any all know recall remember".split()
 )
+# Han, kana and CJK compatibility ideographs are written without spaces, so a
+# run of them is indexed as overlapping character pairs instead of one token.
+_CJK = "\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff"
+_WORD = re.compile("[{0}]+|[^\\W_{0}]+".format(_CJK), flags=re.UNICODE)
+_CJK_RUN = re.compile("[{}]".format(_CJK))
 _WEIGHTS = {
     "lexical": 0.46,
     "vector": 0.18,
@@ -40,19 +47,30 @@ _WEIGHTS = {
 _STRATEGIES = frozenset({"hybrid", "lexical", "vector", "full_context"})
 
 
+def _singular(word: str) -> str:
+    """A small, explicit English plural normalizer, not an opaque language model."""
+    if len(word) <= 3 or not word.endswith("s") or word.endswith(("ss", "us", "is")):
+        return word
+    if len(word) > 4 and word.endswith("ies"):
+        return word[:-3] + "y"
+    if word.endswith(("sses", "xes", "zes", "ches", "shes")):
+        return word[:-2]
+    return word[:-1]
+
+
 def _tokens(text: str) -> List[str]:
-    words = re.findall(r"[^\W_]+", text.casefold(), flags=re.UNICODE)
     result = []
-    for word in words:
-        if word in _STOPWORDS:
-            continue
-        # A small, explicit plural normalizer, not an opaque language model.
-        if len(word) > 5 and word.endswith("ies"):
-            word = word[:-3] + "y"
-        elif len(word) > 4 and word.endswith("s") and not word.endswith(("ss", "us")):
-            word = word[:-1]
-        result.append(word)
+    for word in _WORD.findall(text.casefold()):
+        if _CJK_RUN.match(word):
+            result.extend([word] if len(word) == 1 else [word[i:i + 2] for i in range(len(word) - 1)])
+        elif word not in _STOPWORDS:
+            result.append(_singular(word))
     return result
+
+
+def _claim_text(memory: Dict[str, Any]) -> str:
+    """The words a memory actually states; labels such as topic and kind are excluded."""
+    return " ".join(str(memory.get(key) or "") for key in ("content", "subject", "predicate", "value"))
 
 
 def _memory_text(memory: Dict[str, Any]) -> str:
@@ -160,6 +178,7 @@ class Retriever:
         query_tokens = _tokens(query)
         query_terms = set(query_tokens)
         token_lists = [_tokens(_memory_text(memory)) for memory in memories]
+        claim_terms = [set(_tokens(_claim_text(memory))) for memory in memories]
         counts = [Counter(tokens) for tokens in token_lists]
         average_length = sum(len(tokens) for tokens in token_lists) / max(1, len(token_lists))
         document_frequency = Counter()
@@ -173,9 +192,11 @@ class Retriever:
             }
 
         results = []
-        for memory, tokens, term_counts in zip(memories, token_lists, counts):
+        for memory, tokens, term_counts, claimed in zip(memories, token_lists, counts, claim_terms):
             overlap = query_terms.intersection(term_counts)
-            if strategy != "full_context" and not overlap:
+            # Topic and kind labels help rank, but a query must share a word
+            # with what the memory says before it counts as evidence.
+            if strategy != "full_context" and not query_terms.intersection(claimed):
                 continue
             raw_bm25 = 0.0
             for term in overlap:

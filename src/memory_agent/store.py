@@ -33,6 +33,12 @@ class VersionConflict(ValueError):
     """An optimistic concurrency check failed; the caller must re-read."""
 
 
+def not_found_message(exc: KeyError) -> str:
+    """Readable text for a missing identifier (``str(KeyError)`` adds quotes)."""
+    detail = str(exc.args[0]) if exc.args else ""
+    return detail if "not found" in detail.lower() else "Not found: " + detail
+
+
 def utcnow() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
@@ -90,6 +96,8 @@ def _validate_memory(row: dict) -> dict:
     if any(row[name] is not None for name in ("subject", "predicate", "value")):
         if not all(row[name] is not None for name in ("subject", "predicate", "value")):
             raise ValueError("subject, predicate, and value must be provided together")
+    if row.get("valid_from") is None:
+        raise ValueError("valid_from is required; omit it only when adding a memory that starts now")
     row["valid_from"] = normalize_time(row["valid_from"])
     if row.get("valid_until") is not None:
         row["valid_until"] = normalize_time(row["valid_until"])
@@ -143,6 +151,12 @@ CREATE TRIGGER IF NOT EXISTS sources_immutable_update BEFORE UPDATE ON sources
 BEGIN SELECT RAISE(ABORT, 'Source evidence is immutable'); END;
 CREATE TRIGGER IF NOT EXISTS sources_immutable_delete BEFORE DELETE ON sources
 BEGIN SELECT RAISE(ABORT, 'Source evidence is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS sources_immutable_replace BEFORE INSERT ON sources
+WHEN EXISTS (SELECT 1 FROM sources WHERE id = NEW.id)
+BEGIN SELECT RAISE(ABORT, 'Source evidence is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS events_immutable_replace BEFORE INSERT ON events
+WHEN NEW.id IS NOT NULL AND EXISTS (SELECT 1 FROM events WHERE id = NEW.id)
+BEGIN SELECT RAISE(ABORT, 'Audit events are immutable'); END;
 CREATE TRIGGER IF NOT EXISTS events_immutable_update BEFORE UPDATE ON events
 BEGIN SELECT RAISE(ABORT, 'Audit events are immutable'); END;
 CREATE TRIGGER IF NOT EXISTS events_immutable_delete BEFORE DELETE ON events
@@ -250,12 +264,17 @@ class Store:
         prepared = [self._prepare_add(item) for item in items]
         if not prepared:
             return []
+        shared = {}
+        for row, source in prepared:
+            first = shared.setdefault((source["label"], source["text"]), source)
+            row["source_id"] = first["id"]
         with self._lock, contextlib.closing(self.connection()) as conn:
             try:
                 conn.execute("BEGIN IMMEDIATE")
-                for row, source in prepared:
+                for source in shared.values():
                     conn.execute("INSERT INTO sources(id,text,label,created_at) VALUES (?,?,?,?)",
                                  tuple(source[key] for key in ("id", "text", "label", "created_at")))
+                for row, _ in prepared:
                     columns = tuple(row)
                     conn.execute(
                         f"INSERT INTO memories ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})",
@@ -431,7 +450,7 @@ class Store:
             return {"error": self.projection_errors[0]}
         self.projection_errors = [
             "Skipped unmanaged projection path: " + path for path in result.get("skipped", [])
-        ]
+        ] + ["Could not write projection " + error for error in result.get("errors", [])]
         return result
 
     def _safe_path(self, relative: str) -> Path:
@@ -493,41 +512,66 @@ class Store:
                         old_paths = manifest.get("paths", [])
                 except (ValueError, AttributeError):
                     pass
-            paths, skipped = [], []
+            paths, skipped, errors = [], [], []
             for row in memories:
                 relative = f"memory/{row['topic']}/{row['id']}.md"
-                path = self._safe_path(relative)
-                if path.exists() and not path.read_text(encoding="utf-8").startswith(_EXPORT_MARKER):
-                    skipped.append(relative)
-                    continue
                 metadata = {k: row[k] for k in row if k != "content"}
                 body = (_EXPORT_MARKER + "\n\n# Memory " + row["id"] + "\n\n"
                         + "```json\n" + json.dumps(metadata, indent=2, ensure_ascii=False) + "\n```\n\n"
                         + row["content"] + "\n\n"
                         + f"Evidence: [{row['source_id']}](../../" + "../" * row["topic"].count("/")
                         + f"evidence/{row['source_id']}.json)\n")
-                self._write_atomic(path, body)
+                # One refused path (for example a symlinked folder) must not
+                # stop every later projection, the index, or the manifest.
+                try:
+                    path = self._safe_path(relative)
+                    if path.exists():
+                        existing = path.read_text(encoding="utf-8")
+                        if not existing.startswith(_EXPORT_MARKER):
+                            skipped.append(relative)
+                            continue
+                        if existing == body:
+                            paths.append(relative)
+                            continue
+                    self._write_atomic(path, body)
+                except (OSError, ValueError) as exc:
+                    errors.append(f"{relative}: {exc}")
+                    continue
                 paths.append(relative)
             for source in sources:
-                path = self._safe_path(f"evidence/{source['id']}.json")
-                # Immutable evidence files are created once, never rewritten.
-                if not path.exists():
-                    self._write_atomic(path, json.dumps(source, indent=2, ensure_ascii=False) + "\n")
+                relative = f"evidence/{source['id']}.json"
+                try:
+                    path = self._safe_path(relative)
+                    # Immutable evidence files are created once, never rewritten.
+                    if not path.exists():
+                        self._write_atomic(path, json.dumps(source, indent=2, ensure_ascii=False) + "\n")
+                except (OSError, ValueError) as exc:
+                    errors.append(f"{relative}: {exc}")
+            # Compare case-insensitively: on a case-insensitive disk, a topic
+            # whose capitalization changed shares one file with its old path.
+            current = {relative.casefold() for relative in paths}
             for relative in old_paths:
-                if not isinstance(relative, str) or relative in paths or not relative.startswith("memory/"):
+                if not isinstance(relative, str) or relative.casefold() in current or not relative.startswith("memory/"):
                     continue
-                path = self._safe_path(relative)
-                if path.is_file() and path.read_text(encoding="utf-8").startswith(_EXPORT_MARKER):
-                    path.unlink()
+                try:
+                    path = self._safe_path(relative)
+                    if path.is_file() and path.read_text(encoding="utf-8").startswith(_EXPORT_MARKER):
+                        path.unlink()
+                except (OSError, ValueError) as exc:
+                    errors.append(f"{relative}: {exc}")
             index_path = self._safe_path("memory/INDEX.md")
             index = [_EXPORT_MARKER, "", "# Memory index", "", "SQLite and immutable evidence are authoritative. Edit memories through the API or CLI.", ""]
             for row in memories:
                 link = f"{row['topic']}/{row['id']}.md"
-                label = row["content"].splitlines()[0][:100].replace("[", "(").replace("]", ")")
+                label = (row["content"].splitlines() or [""])[0][:100].replace("\\", "/").replace("[", "(").replace("]", ")")
                 index.append(f"- [{label}]({link}) — {row['kind']}, {row['status']}, v{row['version']}")
-            if not index_path.exists() or index_path.read_text(encoding="utf-8").startswith(_EXPORT_MARKER):
-                self._write_atomic(index_path, "\n".join(index) + "\n")
-            else:
+            index_text = "\n".join(index) + "\n"
+            existing_index = index_path.read_text(encoding="utf-8") if index_path.exists() else None
+            if existing_index is None or (existing_index.startswith(_EXPORT_MARKER) and existing_index != index_text):
+                self._write_atomic(index_path, index_text)
+            elif not existing_index.startswith(_EXPORT_MARKER):
                 skipped.append("memory/INDEX.md")
-            self._write_atomic(manifest_path, json.dumps({"generator": "self-evolving-memory-agent", "paths": paths}, indent=2) + "\n")
-            return {"memories": len(paths), "sources": len(sources), "skipped": skipped}
+            manifest_text = json.dumps({"generator": "self-evolving-memory-agent", "paths": paths}, indent=2) + "\n"
+            if not manifest_path.exists() or manifest_path.read_text(encoding="utf-8") != manifest_text:
+                self._write_atomic(manifest_path, manifest_text)
+            return {"memories": len(paths), "sources": len(sources), "skipped": skipped, "errors": errors}

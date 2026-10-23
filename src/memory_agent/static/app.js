@@ -10,7 +10,7 @@
   };
   const viewNames = { overview: "Overview", memories: "Memory library", evolution: "Evolution", activity: "Evidence & activity", benchmark: "Evaluation lab" };
   const kindIcons = { fact: "◇", preference: "♡", event: "◷", procedure: "↗", note: "▤" };
-  const proposalIcons = { duplicate: "≋", deduplicate: "≋", contradiction: "⇄", temporal_conflict: "⇄", reclassify: "↗", reorganize: "⊞", split: "⊞" };
+  const proposalIcons = { duplicate: "≋", deduplicate: "≋", contradiction: "⇄", interruption: "⇄", supersede: "↦", classify: "↗", temporal_conflict: "⇄", reclassify: "↗", reorganize: "⊞", split: "⊞" };
   const nice = value => String(value ?? "").replace(/[_-]+/g, " ").replace(/\b\w/g, c => c.toUpperCase());
   const shortId = value => String(value || "").slice(0, 12);
   const display = value => value === null || value === undefined || value === "" ? "—" : typeof value === "object" ? JSON.stringify(value, null, 2) : String(value);
@@ -182,7 +182,7 @@
     let items = state.search ? state.search.results || [] : state.memories.map(memory => ({ memory }));
     if (state.currentOnly && !state.search) items = items.filter(item => currentMemory(item.memory));
     if (state.kind) items = items.filter(item => item.memory.kind === state.kind);
-    $("#memory-result-count").textContent = `${items.length} ${state.search ? "results" : "memories"}`;
+    $("#memory-result-count").textContent = `${items.length} ${state.search ? (items.length === 1 ? "result" : "results") : (items.length === 1 ? "memory" : "memories")}`;
     $("#search-feedback").hidden = !state.search || !state.search.retrieval_id || !items.length;
     $("#all-memories-button").classList.toggle("selected", !state.currentOnly && !state.search);
     $("#current-memories-button").classList.toggle("selected", state.currentOnly && !state.search);
@@ -235,7 +235,9 @@
       if (!query) return;
       const body = { query, limit: 20 };
       const asOf = $("#search-date").value;
-      if (asOf) body.as_of = asOf;
+      // A date means midnight UTC; choosing today should include today's additions, so search "now" instead.
+      const today = new Date(); const localToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+      if (asOf && asOf !== localToday) body.as_of = asOf;
       state.search = await request("/api/search", body);
       state.relevant.clear(); renderMemories();
     });
@@ -258,10 +260,11 @@
       main.append(node("div", "proposal-icon", proposalIcons[item.kind] || "✳"), content);
       const bottom = node("div", "proposal-bottom");
       const changes = item.changes || [];
+      const changed = changes.filter(change => Object.keys(change.changes || {}).length);
       const actions = node("div", "proposal-actions");
       if (item.status === "pending") actions.append(button("Dismiss", "button button-small button-white", control => actOnProposal(item, "reject", control)));
       actions.append(button(item.status === "applied" ? "Inspect & undo ↗" : changes.length ? "Review changes ↗" : "Inspect conflict ↗", "button button-small button-primary", () => showProposal(item)));
-      bottom.append(node("span", "proposal-meta", `${changes.length ? `${changes.length} ${changes.length === 1 ? "memory" : "memories"} affected` : "Needs a manual correction"} · ${date(item.created_at)}`), actions);
+      bottom.append(node("span", "proposal-meta", `${changed.length ? `${changed.length} ${changed.length === 1 ? "memory" : "memories"} affected` : "Needs a manual correction"} · ${date(item.created_at)}`), actions);
       card.append(main, bottom); target.append(card);
     });
   }
@@ -365,6 +368,7 @@
         row.append(node("span", "change-key", nice(key)), transition); values.append(row);
       });
       if (current.content) values.prepend(node("p", "field-help", current.content));
+      if (!Object.keys(change.changes || {}).length) values.append(node("p", "field-help", "Not changed. Its version is checked so the proposal stops if this record is edited first."));
       if (current.id) values.append(button("Inspect source ↗", "text-link", () => showMemory(current)));
       item.append(values); section.append(item);
     });
@@ -374,8 +378,10 @@
       actions.append(button("Dismiss", "button button-white", control => actOnProposal(proposal, "reject", control)));
       if (changes.length) actions.append(button("Apply this change", "button button-primary", control => actOnProposal(proposal, "apply", control)));
     } else if (proposal.status === "applied") {
-      target.append(node("p", "field-help", "Undo restores the previous fields only if no subsequent edit has changed the affected memories. Evidence and audit history remain available."));
+      target.append(node("p", "field-help", "Undo restores the previous values of the fields this change wrote, unless one of those fields has been edited since. Evidence and audit history remain available."));
       actions.append(button("Undo this change", "button button-danger", control => actOnProposal(proposal, "undo", control)));
+    } else if (proposal.status === "outdated") {
+      target.append(node("p", "field-help", "The affected memories changed after this proposal was made, so it can no longer be applied. The latest review reflects the current records."));
     }
   }
 
@@ -443,8 +449,9 @@
       const data = new FormData(form);
       const payload = {
         content: String(data.get("content") || "").trim(), kind: data.get("kind"), topic: String(data.get("topic") || "").trim(),
-        confidence: Number(data.get("confidence")), importance: Number(data.get("importance")),
       };
+      // A blank score keeps the stored value (or the server default) instead of becoming 0.
+      ["confidence", "importance"].forEach(key => { const raw = String(data.get(key) ?? "").trim(); if (raw) payload[key] = Number(raw); });
       if (state.editing) {
         payload.status = data.get("status");
         ["subject", "predicate", "value"].forEach(key => { payload[key] = String(data.get(key) || "").trim() || null; });

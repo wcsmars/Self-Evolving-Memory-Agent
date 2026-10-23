@@ -11,9 +11,12 @@ def extract(text: str, topic: str = "inbox") -> list:
     if len(text) > 100_000:
         raise ValueError("text is limited to 100,000 characters per import")
     items = []
-    for raw in text.splitlines():
-        line = re.sub(r"^\s*[-*]\s+", "", raw).strip()
-        if not line or line.startswith("#"):
+    # Split on real line breaks only; str.splitlines() also breaks on form
+    # feeds and Unicode separators that can appear inside one pasted line.
+    for raw in re.split(r"\r\n|\r|\n", text):
+        line = re.sub(r"^\s*(?:[-*+]|\d{1,3}[.)])\s+", "", raw).strip()
+        # Skip Markdown headings ("# Title"), not text such as "#1 priority".
+        if not line or re.match(r"#{1,6}(?:\s|$)", line):
             continue
         content = line
         date = re.match(r"^\[(\d{4}-\d{2}-\d{2})\]\s*(.+)$", line)

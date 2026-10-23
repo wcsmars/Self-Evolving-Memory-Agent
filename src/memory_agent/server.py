@@ -7,12 +7,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from . import __version__
 from .benchmark import run_benchmark
 from .demo import seed_demo
 from .evolution import EvolutionEngine
 from .ingest import ingest
 from .retrieval import Retriever
-from .store import Store, VersionConflict
+from .store import Store, VersionConflict, not_found_message
 
 MAX_BODY = 1_048_576
 
@@ -46,12 +47,14 @@ class App:
             if path.startswith("/api/sources/"):
                 return self.store.get_source(path.rsplit("/", 1)[1])
             if path == "/api/health":
-                return {"status": "ok", "version": "0.1.0"}
+                return {"status": "ok", "version": __version__}
         if method == "POST":
             if path == "/api/benchmark":
                 return run_benchmark()
             with self.write_lock:
                 if path == "/api/memories":
+                    if "content" not in body:
+                        raise ValueError("content is required")
                     allowed = {"content", "kind", "topic", "subject", "predicate", "value", "valid_from", "valid_until", "confidence", "importance", "source", "source_text"}
                     unknown = set(body) - allowed
                     if unknown:
@@ -60,7 +63,10 @@ class App:
                 if path == "/api/ingest":
                     return {"memories": ingest(self.store, body.get("text"), source=body.get("source", "text import"), topic=body.get("topic", "inbox"))}
                 if path == "/api/search":
-                    return self.retriever.search(body.get("query", ""), as_of=body.get("as_of") or None, limit=body.get("limit", 8))
+                    as_of = body.get("as_of")
+                    # Only a missing or empty date means "now"; anything else is validated.
+                    return self.retriever.search(body.get("query", ""), as_of=None if as_of in (None, "") else as_of,
+                                                 limit=body.get("limit", 8))
                 if path == "/api/feedback":
                     return {"learning": self.retriever.feedback(body.get("retrieval_id"), body.get("relevant_ids", []))}
                 if path == "/api/review":
@@ -89,7 +95,7 @@ def make_server(root, host="127.0.0.1", port=8765):
     static = Path(__file__).parent / "static"
 
     class Handler(BaseHTTPRequestHandler):
-        server_version = "MemoryAgent/0.1"
+        server_version = "MemoryAgent/" + __version__
 
         def _same_origin(self):
             try:
@@ -116,6 +122,22 @@ def make_server(root, host="127.0.0.1", port=8765):
             if self.command != "HEAD":
                 self.wfile.write(data)
 
+        def _discard(self, length):
+            """Briefly drain an oversized body after replying, so a client that is
+            still uploading reads the 413 instead of a reset connection."""
+            remaining = min(length, 8 * MAX_BODY)
+            try:
+                settimeout = getattr(self.connection, "settimeout", None)
+                if settimeout is not None:
+                    settimeout(2)
+                while remaining > 0:
+                    chunk = self.rfile.read(min(65536, remaining))
+                    if not chunk:
+                        break
+                    remaining -= len(chunk)
+            except Exception:
+                pass  # best effort: the reply has already been sent
+
         def _handle(self, method):
             if not self._same_origin():
                 self._send(403, {"error": "Only same-origin localhost requests are accepted"})
@@ -140,8 +162,12 @@ def make_server(root, host="127.0.0.1", port=8765):
                     if self.headers.get("Transfer-Encoding"):
                         raise ValueError("Chunked requests are not supported")
                     length = int(self.headers.get("Content-Length", "0"))
-                    if length < 0 or length > MAX_BODY:
+                    if length < 0:
+                        raise ValueError("Content-Length must not be negative")
+                    if length > MAX_BODY:
+                        self.close_connection = True
                         self._send(413, {"error": "Request body is limited to 1 MiB"})
+                        self._discard(length)
                         return
                     if self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
                         self._send(415, {"error": "Use Content-Type: application/json"})
@@ -152,11 +178,13 @@ def make_server(root, host="127.0.0.1", port=8765):
                 result = app.dispatch(method, parsed.path, parse_qs(parsed.query), body)
                 self._send(200, result)
             except KeyError as exc:
-                self._send(404, {"error": str(exc).strip("'")})
+                self._send(404, {"error": not_found_message(exc)})
             except VersionConflict as exc:
                 self._send(409, {"error": str(exc)})
             except (ValueError, TypeError) as exc:
                 self._send(400, {"error": str(exc)})
+            except RecursionError:
+                self._send(400, {"error": "Request JSON is nested too deeply"})
             except RuntimeError as exc:
                 self._send(409, {"error": str(exc)})
             except Exception:

@@ -237,7 +237,7 @@ def render_svg(result: dict[str, Any]) -> str:
     panel compares one measure across strategies, and strategy names label rows.
     """
     strategies = result["strategies"]
-    label_width, bar_width, row, gap = 190, 150, 26, 36
+    label_width, bar_width, row = 190, 150, 26
     panel_width = bar_width + 56
     top, header = 64, 44
     width = label_width + len(_CHART_PANELS) * panel_width + 24

@@ -82,6 +82,22 @@ class IngestionIntegrationTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("Error:", errors)
 
+    def test_only_markdown_headings_are_skipped_and_list_markers_removed(self):
+        items = extract("# Heading\n## Sub heading\n#1 priority: ship beta\n1. Atlas | owner | Taylor\n2) Plain note")
+        self.assertEqual([i["content"] for i in items], ["#1 priority: ship beta", "Atlas | owner | Taylor", "Plain note"])
+        self.assertEqual(items[1]["subject"], "Atlas")
+
+    def test_unicode_separators_stay_inside_one_line(self):
+        items = extract("Atlas | owner | Taylor\u2028(confirmed by email)\nPage one\x0cpage two")
+        self.assertEqual(len(items), 2)
+
+    def test_one_import_stores_its_evidence_once(self):
+        text = "\n".join("Line {}".format(i) for i in range(50))
+        memories = ingest(self.store, text, source="bulk")
+        self.assertEqual(len({m["source_id"] for m in memories}), 1)
+        self.assertEqual(self.store.get_stats()["sources"], 1)
+        self.assertEqual(len(list((Path(self.temp.name) / "private-data" / "evidence").iterdir())), 1)
+
     def test_cli_update_is_version_checked_and_preserves_original_source(self):
         code, output, errors = self.cli("add", "Atlas status: draft", "--valid-from", "2020-01-01")
         self.assertEqual(code, 0, errors)

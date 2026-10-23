@@ -78,6 +78,28 @@ class RetrievalTests(unittest.TestCase):
         self.add("Atlas project uses Python")
         self.assertEqual(self.retriever.search("what is it about")["results"], [])
 
+    def test_topic_and_kind_labels_alone_do_not_count_as_evidence(self):
+        self.add("Saffron rice needs a long soak.", kind="fact", topic="projects/kitchen")
+        for query in ("quasar violin facts", "unknown project notes"):
+            with self.subTest(query=query):
+                self.assertEqual(self.retriever.search(query)["results"], [])
+        self.assertEqual(len(self.retriever.search("saffron facts")["results"]), 1)
+
+    def test_singular_and_plural_forms_match(self):
+        for stored, query in (("Two bugs were fixed", "bug"), ("Packed the boxes", "box"),
+                              ("New classes start Monday", "class"), ("Quarterly releases are planned", "release")):
+            with self.subTest(query=query):
+                memory = self.add(stored)
+                self.assertIn(memory["id"], [r["memory"]["id"] for r in self.retriever.search(query)["results"]])
+
+    def test_meaningful_short_words_and_chinese_phrases_are_searchable(self):
+        us = self.add("US exports rose in May")
+        memory = self.add("Project uses persistent memory")
+        chinese = self.add("Atlas 項目狀態是測試版")
+        self.assertEqual(self.retriever.search("US")["results"][0]["memory"]["id"], us["id"])
+        self.assertEqual(self.retriever.search("memory")["results"][0]["memory"]["id"], memory["id"])
+        self.assertEqual(self.retriever.search("項目狀態")["results"][0]["memory"]["id"], chinese["id"])
+
     def test_input_validation(self):
         for query in ("", "  ", None, 123, "a" * 4001):
             with self.assertRaises(ValueError):

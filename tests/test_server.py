@@ -140,6 +140,9 @@ class ServerIntegrationTests(unittest.TestCase):
             ({"raw": b"{}", "headers": {"Content-Length": str(MAX_BODY + 1)}}, 413),
             ({"body": {"content": "bad topic", "topic": "../../escape"}}, 400),
             ({"body": {"content": "unknown field", "accidental": True}}, 400),
+            ({"body": {"topic": "missing content"}}, 400),
+            ({"raw": b"[" * 100_000 + b"]" * 100_000}, 400),
+            ({"raw": b"{}", "headers": {"Content-Length": "-1"}}, 400),
         ]
         for args, expected in cases:
             with self.subTest(args=args):
@@ -161,6 +164,13 @@ class ServerIntegrationTests(unittest.TestCase):
         self.assertEqual(self.success("GET", "/api/health")["status"], "ok")
         with self.assertRaises(ValueError):
             make_server(self.temp.name, host="0.0.0.0", port=0)
+
+    def test_search_rejects_non_date_as_of_values(self):
+        for value in (False, 0, [], {}, 123):
+            with self.subTest(value=value):
+                status, result = self.request("POST", "/api/search", {"query": "x", "as_of": value})
+                self.assertEqual(status, 400, result)
+        self.assertEqual(self.success("POST", "/api/search", {"query": "x", "as_of": ""})["as_of"], None)
 
     def raw(self, method, path):
         connection = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
@@ -187,6 +197,32 @@ class ServerIntegrationTests(unittest.TestCase):
                 self.assertEqual(status, 200)
                 self.assertTrue(headers["Content-Type"].startswith("image/svg+xml"))
                 self.assertTrue(body.startswith(b"<svg"))
+
+
+class OversizedUploadTests(unittest.TestCase):
+    """A client that is still uploading must receive the 413, not a reset."""
+
+    def test_oversized_body_receives_413(self):
+        with tempfile.TemporaryDirectory() as root:
+            try:
+                server = make_server(root, port=0)
+            except PermissionError:
+                self.skipTest("This environment forbids loopback socket binds")
+            thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
+            thread.start()
+            try:
+                connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=10)
+                with redirect_stderr(io.StringIO()):
+                    connection.request("POST", "/api/memories", body=b"x" * (2 * MAX_BODY),
+                                       headers={"Content-Type": "application/json"})
+                    response = connection.getresponse()
+                    self.assertEqual(response.status, 413)
+                    self.assertIn("1 MiB", json.loads(response.read())["error"])
+                connection.close()
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=3)
 
 
 class _MemorySocket:

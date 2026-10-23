@@ -11,10 +11,10 @@ POST requests require `Content-Type: application/json` and a JSON object. Bodies
 | POST | `/api/memories` | Add one memory; returns `{memory:...}`. |
 | POST | `/api/memories/{id}/update` | `{expected_version:1,changes:{...}}`; returns `{memory:...}`. |
 | POST | `/api/ingest` | `{text,source?,topic?}`; returns `{memories:[...]}`. |
-| POST | `/api/search` | `{query,as_of?,limit?}`; returns ranked memories, scores, signals, retrieval ID. |
+| POST | `/api/search` | `{query,as_of?,limit?}`; returns ranked memories, scores, signals, retrieval ID. `as_of` is an ISO date or timestamp (a date means 00:00 UTC); omit it or send `""` for now. |
 | POST | `/api/feedback` | `{retrieval_id,relevant_ids:[...]}`; updates learned relevance. |
 | POST | `/api/review` | `{}`; creates review proposals without applying them. |
-| GET | `/api/proposals` | Optional `status`; returns `{proposals:[...]}`. |
+| GET | `/api/proposals` | Optional `status` (`pending`, `applied`, `rejected`, `reverted`, `outdated`); returns `{proposals:[...]}`. |
 | POST | `/api/proposals/{id}/apply` | `{}`; checks versions and applies the complete proposal atomically. |
 | POST | `/api/proposals/{id}/reject` | `{}`; records rejection. |
 | POST | `/api/proposals/{id}/undo` | `{}`; restores previous semantic fields if versions are unchanged. |

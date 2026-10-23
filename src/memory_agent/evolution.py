@@ -16,7 +16,11 @@ from collections import defaultdict
 from contextlib import closing, contextmanager
 from typing import Any, Dict, List, Optional
 
-from .store import Store, utcnow
+from .store import Store, VersionConflict, utcnow
+
+
+_TIMELESS_KINDS = frozenset({"note", "preference", "procedure"})
+PROPOSAL_STATUSES = frozenset({"pending", "applied", "rejected", "reverted", "outdated"})
 
 
 class ProposalError(ValueError):
@@ -81,7 +85,7 @@ class EvolutionEngine:
         return self._decode(row)
 
     def list_proposals(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
-        if status is not None and status not in {"pending", "applied", "rejected", "reverted"}:
+        if status is not None and status not in PROPOSAL_STATUSES:
             raise ValueError("Unknown proposal status")
         sql = "SELECT * FROM proposals"
         args = ()
@@ -101,7 +105,7 @@ class EvolutionEngine:
         risk: str,
         memories: List[Dict[str, Any]],
         updates: Dict[str, Dict[str, Any]],
-    ) -> None:
+    ) -> str:
         ordered = sorted(memories, key=lambda item: item["id"])
         # Assertion-only entries protect supporting memories as well as changed
         # ones. A modified keeper must make a duplicate proposal stale.
@@ -128,16 +132,37 @@ class EvolutionEngine:
                  json.dumps(changes, ensure_ascii=False), json.dumps(before, ensure_ascii=False),
                  json.dumps(evidence), now, now),
             )
+            # The same situation can recur after a proposal was retired, e.g.
+            # when an edit is undone. Rejected proposals stay rejected.
+            conn.execute(
+                "UPDATE proposals SET status='pending', updated_at=? WHERE fingerprint=? AND status='outdated'",
+                (now, fingerprint),
+            )
+        return fingerprint
 
     @staticmethod
-    def _same_meaning_key(memory: Dict[str, Any]) -> tuple:
+    def _open_statement(memory: Dict[str, Any]) -> bool:
+        """An unstructured note, preference or procedure with no known end."""
+        return (memory["kind"] in _TIMELESS_KINDS and memory.get("subject") is None
+                and memory["valid_until"] is None)
+
+    @classmethod
+    def _same_meaning_key(cls, memory: Dict[str, Any]) -> tuple:
         # No embedding threshold or paraphrase inference: small wording changes
         # may change a fact. Source IDs differ but original sources remain stored.
+        # Re-importing the same open-ended statement repeats it at a later start
+        # time, so its start is ignored. Structured facts and events keep exact
+        # intervals: a value can legitimately return later (A, then B, then A).
         keys = (
             "content", "kind", "topic", "subject", "predicate", "value",
-            "valid_from", "valid_until", "confidence", "importance",
+            "valid_until", "confidence", "importance",
         )
-        return tuple(memory.get(key) for key in keys)
+        start = None if cls._open_statement(memory) else memory["valid_from"]
+        return tuple(memory.get(key) for key in keys) + (start,)
+
+    def _status(self, fingerprint: str) -> str:
+        with self._connection() as conn:
+            return conn.execute("SELECT status FROM proposals WHERE fingerprint=?", (fingerprint,)).fetchone()["status"]
 
     @staticmethod
     def _overlap(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
@@ -149,9 +174,11 @@ class EvolutionEngine:
         """Persist suggestions and return pending proposals, without applying any.
 
         Reviewing the same versions is idempotent, including after rejection.
-        Existing stale proposals remain visible and will fail their version
-        check if applied. A new version can produce a new proposal.
+        A pending proposal that this review would no longer make, because its
+        records were edited or new evidence joined its group, becomes
+        ``outdated``: it stays in the history but can no longer be applied.
         """
+        current = set()
         memories = [m for m in self.store.list_memories(include_inactive=True) if m["status"] == "active"]
         claimed = set()
         duplicates = defaultdict(list)
@@ -160,15 +187,22 @@ class EvolutionEngine:
         for group in duplicates.values():
             if len(group) < 2:
                 continue
-            group.sort(key=lambda m: (m["created_at"], m["id"]))
+            group.sort(key=lambda m: (m["valid_from"], m["created_at"], m["id"]))
             keeper = group[0]
-            self._propose(
+            if len({m["valid_from"] for m in group}) == 1:
+                basis = ("The content, structured fact, type, topic, confidence, importance and validity interval match exactly. "
+                         "Keep {} and archive the repeated records.")
+            else:
+                basis = ("The same open-ended {} was recorded more than once with identical wording, topic, confidence and importance. "
+                         "Keep the earliest record, {}, and archive the later repeats.").format(keeper["kind"], "{}")
+            fingerprint = self._propose(
                 "deduplicate", "Consolidate {} identical memories".format(len(group)),
-                "The content, structured fact, type, topic, confidence, importance and validity interval match exactly. "
-                "Keep {} and archive the repeated records. Every original source and revision remains available.".format(keeper["id"]),
+                basis.format(keeper["id"]) + " Every original source and revision remains available.",
                 "low", group, {m["id"]: {"status": "archived"} for m in group[1:]},
             )
-            claimed.update(m["id"] for m in group)
+            current.add(fingerprint)
+            if self._status(fingerprint) == "pending":
+                claimed.update(m["id"] for m in group)
 
         facts = defaultdict(list)
         for memory in memories:
@@ -176,8 +210,10 @@ class EvolutionEngine:
                 # Avoid silently equating distinct identifiers, e.g. ticker case.
                 facts[(memory["subject"], memory["predicate"])].append(memory)
         for (subject, predicate), group in facts.items():
-            # Resolve duplicates first, so no overlapping operation can hide
-            # another copy of a fact from the proposed historical timeline.
+            # Resolve pending duplicates first, so no overlapping operation can
+            # hide another copy of a fact from the proposed historical timeline.
+            # After a rejected dedupe, copies share an interval and so receive
+            # identical updates below.
             if any(memory["id"] in claimed for memory in group):
                 continue
             group.sort(key=lambda m: (m["valid_from"], m["id"]))
@@ -185,28 +221,42 @@ class EvolutionEngine:
                          if a["value"] != b["value"] and self._overlap(a, b)]
             if not conflicts:
                 continue
-            involved = {m["id"]: m for pair in conflicts for m in pair}
             simultaneous = any(a["valid_from"] == b["valid_from"] for a, b in conflicts)
+            # A bounded newer value that ends before the older one is an
+            # interruption: one shortened interval cannot express the older
+            # value resuming afterwards, so a person must split the record.
+            interrupted = any(
+                b["valid_until"] is not None and (a["valid_until"] is None or b["valid_until"] < a["valid_until"])
+                for a, b in conflicts
+            )
             if simultaneous:
-                self._propose(
+                current.add(self._propose(
                     "contradiction", "Review conflicting values for {} · {}".format(subject, predicate),
                     "Different values overlap and at least two begin at the same time. Chronology cannot choose a winner. "
                     "Inspect the original evidence and edit the fact or its validity interval manually; this proposal cannot be applied.",
                     "high", group, {},
-                )
+                ))
+            elif interrupted:
+                current.add(self._propose(
+                    "interruption", "Review an interrupted value for {} · {}".format(subject, predicate),
+                    "A dated value ends while an earlier value is still open. Closing the earlier value at the later start "
+                    "would erase the period after the interruption ends, and extending it would assume the earlier value "
+                    "resumed. Inspect the evidence and add or edit the records manually; this proposal cannot be applied.",
+                    "medium", group, {},
+                ))
             else:
                 updates = {}
                 for older, newer in conflicts:
                     end = newer["valid_from"]
                     if older["id"] not in updates or end < updates[older["id"]]["valid_until"]:
                         updates[older["id"]] = {"valid_until": end}
-                self._propose(
+                current.add(self._propose(
                     "supersede", "Separate changing values for {} · {}".format(subject, predicate),
                     "Different values have overlapping validity intervals. Proposed interpretation: the later dated value "
                     "supersedes the earlier value from its start time. This is a hypothesis requiring review, not a truth judgment. "
                     "Close the older interval while preserving the earlier fact for historical queries.",
                     "medium", group, updates,
-                )
+                ))
             claimed.update(m["id"] for m in group)
 
         for memory in memories:
@@ -214,11 +264,11 @@ class EvolutionEngine:
                 continue
             # Only an explicit self-stated preference, never inferred sentiment.
             if re.match(r"^\s*I (?:prefer|always prefer)\s+\S", memory["content"], re.IGNORECASE):
-                self._propose(
+                current.add(self._propose(
                     "classify", "Classify an explicit preference",
                     "This note explicitly begins with 'I prefer' and has no expiry. Reclassify its type while preserving its wording and evidence.",
                     "low", [memory], {memory["id"]: {"kind": "preference"}},
-                )
+                ))
                 claimed.add(memory["id"])
 
         topics = defaultdict(list)
@@ -235,12 +285,18 @@ class EvolutionEngine:
             updates = {m["id"]: {"topic": topic + "/" + m["kind"]}
                        for m in group if topic.split("/")[-1] != m["kind"]}
             if updates:
-                self._propose(
+                current.add(self._propose(
                     "reorganize", "Split {} into memory types".format(topic),
                     "This topic contains {} records and multiple memory types. Move records into type subfolders to make the Markdown projection easier to browse. "
                     "Content, evidence and timestamps do not change.".format(len(group)),
                     "low", group, updates,
-                )
+                ))
+        with self._connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            stale = [row["id"] for row in conn.execute("SELECT id, fingerprint FROM proposals WHERE status='pending'")
+                     if row["fingerprint"] not in current]
+            conn.executemany("UPDATE proposals SET status='outdated', updated_at=? WHERE id=?",
+                             [(utcnow(), proposal_id) for proposal_id in stale])
         return self.list_proposals("pending")
 
     def _load_locked(self, conn: sqlite3.Connection, proposal_id: str, required_status: str) -> Dict[str, Any]:
@@ -253,11 +309,11 @@ class EvolutionEngine:
         return proposal
 
     def apply(self, proposal_id: str) -> Dict[str, Any]:
-        with self._connection() as conn:
+        with self.store._lock, self._connection() as conn:
             conn.execute("BEGIN IMMEDIATE")
             proposal = self._load_locked(conn, proposal_id, "pending")
             if not proposal["actionable"]:
-                raise ProposalError("This contradiction requires manual evidence review and cannot be applied")
+                raise ProposalError("This proposal requires manual evidence review and cannot be applied")
             if proposal["kind"] == "supersede":
                 # Versions detect edits; this set check detects newly arriving
                 # evidence that was not part of the reviewed hypothesis.
@@ -282,22 +338,35 @@ class EvolutionEngine:
         return self.get_proposal(proposal_id)
 
     def reject(self, proposal_id: str) -> Dict[str, Any]:
-        with self._connection() as conn:
+        with self.store._lock, self._connection() as conn:
             conn.execute("BEGIN IMMEDIATE")
             self._load_locked(conn, proposal_id, "pending")
             conn.execute("UPDATE proposals SET status='rejected', updated_at=? WHERE id=?", (utcnow(), proposal_id))
         return self.get_proposal(proposal_id)
 
     def undo(self, proposal_id: str) -> Dict[str, Any]:
-        with self._connection() as conn:
+        with self.store._lock, self._connection() as conn:
             conn.execute("BEGIN IMMEDIATE")
             proposal = self._load_locked(conn, proposal_id, "applied")
             restore = []
             for change in proposal["changes"]:
+                if not change["changes"]:
+                    continue  # supporting records were only checked, never written
                 memory_id = change["id"]
+                row = conn.execute("SELECT * FROM memories WHERE id=?", (memory_id,)).fetchone()
+                if row is None:
+                    raise KeyError(memory_id)
+                # Undo is safe exactly when every field it restores still holds
+                # the value this proposal wrote. Edits to other fields, or a
+                # later proposal that was itself undone, do not block it.
+                edited = sorted(key for key, value in change["changes"].items() if row[key] != value)
+                if edited:
+                    raise VersionConflict(
+                        "Memory {} was edited after this change ({}); undo would overwrite that edit".format(
+                            memory_id, ", ".join(edited)))
                 restore.append({
                     "id": memory_id,
-                    "expected_version": proposal["after_versions"][memory_id],
+                    "expected_version": row["version"],
                     "changes": {key: proposal["before"][memory_id][key] for key in change["changes"]},
                 })
             self.store.mutate_memories(

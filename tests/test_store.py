@@ -204,6 +204,50 @@ class StoreTests(unittest.TestCase):
         self.store.refresh_projections()
         self.assertEqual(self.store.get_stats()["projection_errors"], [])
 
+    def test_explicit_null_start_is_rejected_on_update(self):
+        memory = self.remember()
+        with self.assertRaises(ValueError):
+            self.store.update_memory(memory["id"], {"valid_from": None}, expected_version=1)
+        self.assertEqual(self.store.get_memory(memory["id"])["valid_from"], "2024-01-01T00:00:00.000000Z")
+
+    def test_replace_cannot_rewrite_evidence_or_audit_events(self):
+        import contextlib
+        import sqlite3
+        memory = self.remember()
+        with contextlib.closing(self.store.connection()) as conn:
+            for statement, args in (
+                ("INSERT OR REPLACE INTO sources(id,text,label,created_at) VALUES (?,?,?,?)", (memory["source_id"], "forged", "x", "2000")),
+                ("REPLACE INTO events(id,event_type,created_at,data) VALUES (1,'forged','2000','{}')", ()),
+            ):
+                with self.subTest(statement=statement[:20]):
+                    with self.assertRaises(sqlite3.IntegrityError):
+                        conn.execute(statement, args)
+        self.assertNotEqual(self.store.get_source(memory["source_id"])["text"], "forged")
+
+    def test_one_refused_projection_path_does_not_stop_the_rest(self):
+        outside = tempfile.TemporaryDirectory()
+        self.addCleanup(outside.cleanup)
+        (self.root / "memory" / "notes").symlink_to(outside.name, target_is_directory=True)
+        refused = self.remember(topic="notes")
+        later = self.remember("Written after the refused path", topic="zeta")
+        errors = self.store.get_stats()["projection_errors"]
+        self.assertTrue(any(refused["id"] in error for error in errors))
+        self.assertTrue((self.root / "memory" / "zeta" / (later["id"] + ".md")).exists())
+        self.assertIn(later["id"], (self.root / "memory" / "INDEX.md").read_text())
+        self.assertEqual(list(Path(outside.name).iterdir()), [])
+
+    def test_topic_capitalization_change_keeps_its_projection(self):
+        memory = self.remember(topic="Projects/atlas")
+        self.store.update_memory(memory["id"], {"topic": "projects/atlas"})
+        self.assertTrue((self.root / "memory" / "projects" / "atlas" / (memory["id"] + ".md")).exists())
+
+    def test_unchanged_projection_files_are_not_rewritten(self):
+        memory = self.remember()
+        path = self.root / "memory" / "inbox" / (memory["id"] + ".md")
+        before = path.stat().st_mtime_ns
+        self.remember("Another memory")
+        self.assertEqual(path.stat().st_mtime_ns, before)
+
 
 if __name__ == "__main__":
     unittest.main()
