@@ -1,0 +1,9 @@
+# Entirely synthetic example. One memory per non-empty line.
+[2026-01-01] Project Atlas | status | prototype
+[2026-02-01] Project Atlas | status | beta
+[2026-01-01] Project Atlas | database | SQLite
+[2026-01-01] Project Atlas | database | SQLite
+I prefer concise summaries with links to the original sources.
+Always preserve the original evidence before changing a memory.
+A useful memory agent should explain why it retrieved each fact.
+

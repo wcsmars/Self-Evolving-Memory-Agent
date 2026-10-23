@@ -1,0 +1,412 @@
+{
+  "version": 1,
+  "synthetic": true,
+  "memories": [
+    {
+      "key": "atlas_pending",
+      "content": "Atlas release status is pending.",
+      "subject": "Atlas",
+      "predicate": "release status",
+      "value": "pending",
+      "topic": "projects/atlas",
+      "valid_from": "2026-09-01",
+      "valid_until": "2026-09-15",
+      "kind": "fact",
+      "confidence": 0.9,
+      "importance": 0.5,
+      "source": "Synthetic benchmark fixture"
+    },
+    {
+      "key": "atlas_beta",
+      "content": "Atlas release status is beta.",
+      "subject": "Atlas",
+      "predicate": "release status",
+      "value": "beta",
+      "topic": "projects/atlas",
+      "valid_from": "2026-09-15",
+      "valid_until": "2026-10-01",
+      "kind": "fact",
+      "confidence": 0.9,
+      "importance": 0.5,
+      "source": "Synthetic benchmark fixture"
+    },
+    {
+      "key": "atlas_shipped",
+      "content": "Atlas release status is shipped.",
+      "subject": "Atlas",
+      "predicate": "release status",
+      "value": "shipped",
+      "topic": "projects/atlas",
+      "valid_from": "2026-10-01",
+      "kind": "fact",
+      "confidence": 0.9,
+      "importance": 0.5,
+      "source": "Synthetic benchmark fixture"
+    },
+    {
+      "key": "lyra_seed",
+      "content": "Lyra funding stage is seed.",
+      "subject": "Lyra",
+      "predicate": "funding stage",
+      "value": "seed",
+      "topic": "projects/lyra",
+      "valid_from": "2026-07-01",
+      "valid_until": "2026-09-10",
+      "kind": "fact",
+      "confidence": 0.9,
+      "importance": 0.5,
+      "source": "Synthetic benchmark fixture"
+    },
+    {
+      "key": "lyra_series_a",
+      "content": "Lyra funding stage is series A.",
+      "subject": "Lyra",
+      "predicate": "funding stage",
+      "value": "series A",
+      "topic": "projects/lyra",
+      "valid_from": "2026-09-10",
+      "kind": "fact",
+      "confidence": 0.9,
+      "importance": 0.5,
+      "source": "Synthetic benchmark fixture"
+    },
+    {
+      "key": "language_python",
+      "content": "Robin's preferred programming language is Python.",
+      "kind": "preference",
+      "subject": "Robin",
+      "predicate": "preferred programming language",
+      "value": "Python",
+      "topic": "profile/preferences",
+      "valid_from": "2026-01-01",
+      "valid_until": "2026-10-05",
+      "confidence": 0.9,
+      "importance": 0.5,
+      "source": "Synthetic benchmark fixture"
+    },
+    {
+      "key": "language_rust",
+      "content": "Robin's preferred programming language is Rust.",
+      "kind": "preference",
+      "subject": "Robin",
+      "predicate": "preferred programming language",
+      "value": "Rust",
+      "topic": "profile/preferences",
+      "valid_from": "2026-10-05",
+      "confidence": 0.9,
+      "importance": 0.5,
+      "source": "Synthetic benchmark fixture"
+    },
+    {
+      "key": "coffee",
+      "content": "Robin prefers black coffee.",
+      "kind": "preference",
+      "subject": "Robin",
+      "predicate": "coffee preference",
+      "value": "black coffee",
+      "topic": "profile/preferences",
+      "valid_from": "2026-01-01",
+      "confidence": 0.9,
+      "importance": 0.5,
+      "source": "Synthetic benchmark fixture"
+    },
+    {
+      "key": "lisbon_trip",
+      "content": "Robin's Lisbon conference takes place during October 10 through October 17.",
+      "kind": "event",
+      "subject": "Robin",
+      "predicate": "conference location",
+      "value": "Lisbon",
+      "topic": "events",
+      "valid_from": "2026-10-10",
+      "valid_until": "2026-10-18",
+      "confidence": 0.9,
+      "importance": 0.5,
+      "source": "Synthetic benchmark fixture"
+    },
+    {
+      "key": "luna",
+      "content": "Luna expedition departure is scheduled for December 1.",
+      "kind": "event",
+      "subject": "Luna",
+      "predicate": "expedition departure",
+      "value": "2026-12-01",
+      "topic": "events",
+      "valid_from": "2026-12-01",
+      "confidence": 0.9,
+      "importance": 0.5,
+      "source": "Synthetic benchmark fixture"
+    },
+    {
+      "key": "thermostat",
+      "content": "The greenhouse thermostat target is 19 degrees Celsius.",
+      "subject": "greenhouse",
+      "predicate": "thermostat target",
+      "value": "19 Celsius",
+      "topic": "home",
+      "valid_from": "2026-01-01",
+      "kind": "fact",
+      "confidence": 0.9,
+      "importance": 0.5,
+      "source": "Synthetic benchmark fixture"
+    },
+    {
+      "key": "build_os",
+      "content": "Atlas build runners use Linux.",
+      "subject": "Atlas",
+      "predicate": "build operating system",
+      "value": "Linux",
+      "topic": "projects/atlas",
+      "valid_from": "2026-02-01",
+      "kind": "fact",
+      "confidence": 0.9,
+      "importance": 0.5,
+      "source": "Synthetic benchmark fixture"
+    },
+    {
+      "key": "nimbus_region",
+      "content": "Nimbus deployment region is Europe.",
+      "subject": "Nimbus",
+      "predicate": "deployment region",
+      "value": "Europe",
+      "topic": "projects/nimbus",
+      "valid_from": "2026-06-01",
+      "kind": "fact",
+      "confidence": 0.9,
+      "importance": 0.5,
+      "source": "Synthetic benchmark fixture"
+    },
+    {
+      "key": "nimbus_language",
+      "content": "Nimbus interface language is Spanish.",
+      "subject": "Nimbus",
+      "predicate": "interface language",
+      "value": "Spanish",
+      "topic": "projects/nimbus",
+      "valid_from": "2026-06-01",
+      "kind": "fact",
+      "confidence": 0.9,
+      "importance": 0.5,
+      "source": "Synthetic benchmark fixture"
+    },
+    {
+      "key": "backup",
+      "content": "For backups, encrypt the archive before copying it to offline storage.",
+      "kind": "procedure",
+      "subject": "backup",
+      "predicate": "archive procedure",
+      "value": "encrypt before copying",
+      "topic": "procedures",
+      "valid_from": "2026-01-01",
+      "confidence": 0.9,
+      "importance": 0.5,
+      "source": "Synthetic benchmark fixture"
+    },
+    {
+      "key": "saffron",
+      "content": "Saffron bicycle frame color is amber.",
+      "subject": "Saffron",
+      "predicate": "frame color",
+      "value": "amber",
+      "topic": "hobbies",
+      "valid_from": "2026-10-20",
+      "kind": "fact",
+      "confidence": 0.9,
+      "importance": 0.5,
+      "source": "Synthetic benchmark fixture"
+    }
+  ],
+  "cases": [
+    {
+      "id": "atlas_early",
+      "query": "Atlas release status",
+      "as_of": "2026-09-05",
+      "expected": [
+        "atlas_pending"
+      ],
+      "category": "historical"
+    },
+    {
+      "id": "atlas_boundary",
+      "query": "Atlas release status",
+      "as_of": "2026-09-15",
+      "expected": [
+        "atlas_beta"
+      ],
+      "category": "boundary"
+    },
+    {
+      "id": "atlas_mid",
+      "query": "Atlas release status",
+      "as_of": "2026-09-25",
+      "expected": [
+        "atlas_beta"
+      ],
+      "category": "historical"
+    },
+    {
+      "id": "atlas_current",
+      "query": "Atlas release status",
+      "expected": [
+        "atlas_shipped"
+      ],
+      "category": "updated",
+      "as_of": "2026-10-22"
+    },
+    {
+      "id": "lyra_early",
+      "query": "Lyra funding stage",
+      "as_of": "2026-08-01",
+      "expected": [
+        "lyra_seed"
+      ],
+      "category": "historical"
+    },
+    {
+      "id": "lyra_current",
+      "query": "Lyra funding stage",
+      "expected": [
+        "lyra_series_a"
+      ],
+      "category": "updated",
+      "as_of": "2026-10-22"
+    },
+    {
+      "id": "language_early",
+      "query": "Robin preferred programming language",
+      "as_of": "2026-09-01",
+      "expected": [
+        "language_python"
+      ],
+      "category": "historical"
+    },
+    {
+      "id": "language_current",
+      "query": "Robin preferred programming language",
+      "expected": [
+        "language_rust"
+      ],
+      "category": "updated",
+      "as_of": "2026-10-22"
+    },
+    {
+      "id": "coffee_exact",
+      "query": "black coffee",
+      "expected": [
+        "coffee"
+      ],
+      "category": "exact",
+      "as_of": "2026-10-22"
+    },
+    {
+      "id": "lisbon_during",
+      "query": "Lisbon conference",
+      "as_of": "2026-10-12",
+      "expected": [
+        "lisbon_trip"
+      ],
+      "category": "event"
+    },
+    {
+      "id": "lisbon_expired",
+      "query": "Lisbon conference",
+      "expected": [],
+      "category": "expired",
+      "as_of": "2026-10-22"
+    },
+    {
+      "id": "luna_not_yet",
+      "query": "Luna expedition departure",
+      "expected": [],
+      "category": "future_exclusion",
+      "as_of": "2026-10-22"
+    },
+    {
+      "id": "luna_valid",
+      "query": "Luna expedition departure",
+      "as_of": "2026-12-02",
+      "expected": [
+        "luna"
+      ],
+      "category": "event"
+    },
+    {
+      "id": "thermostat_exact",
+      "query": "greenhouse thermostat target",
+      "expected": [
+        "thermostat"
+      ],
+      "category": "exact",
+      "as_of": "2026-10-22"
+    },
+    {
+      "id": "build_distractor",
+      "query": "Atlas build runners Linux",
+      "expected": [
+        "build_os"
+      ],
+      "category": "distractor",
+      "as_of": "2026-10-22"
+    },
+    {
+      "id": "nimbus_related",
+      "query": "Nimbus",
+      "expected": [
+        "nimbus_region",
+        "nimbus_language"
+      ],
+      "category": "multiple_facts",
+      "as_of": "2026-10-22"
+    },
+    {
+      "id": "backup_procedure",
+      "query": "encrypt archive backups",
+      "expected": [
+        "backup"
+      ],
+      "category": "procedure",
+      "as_of": "2026-10-22"
+    },
+    {
+      "id": "saffron_exact",
+      "query": "Saffron bicycle frame color",
+      "expected": [
+        "saffron"
+      ],
+      "category": "exact",
+      "as_of": "2026-10-22"
+    },
+    {
+      "id": "unknown_entity",
+      "query": "quasar violin sonata",
+      "expected": [],
+      "category": "unknown",
+      "as_of": "2026-10-22"
+    },
+    {
+      "id": "unknown_fact",
+      "query": "penguin passport number",
+      "expected": [],
+      "category": "unknown",
+      "as_of": "2026-10-22"
+    },
+    {
+      "id": "build_paraphrase",
+      "query": "Which computer platform runs compilation jobs?",
+      "expected": [
+        "build_os"
+      ],
+      "category": "semantic_gap",
+      "as_of": "2026-10-22"
+    },
+    {
+      "id": "backup_paraphrase",
+      "query": "How should I secure recovery copies?",
+      "expected": [
+        "backup"
+      ],
+      "category": "semantic_gap",
+      "as_of": "2026-10-22"
+    }
+  ]
+}

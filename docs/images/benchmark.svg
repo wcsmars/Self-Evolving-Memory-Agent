@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1038 302" width="1038" height="302" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-labelledby="title desc">
+<title id="title">Synthetic retrieval benchmark by strategy</title>
+<desc id="desc">22 hand-authored cases, including two paraphrases with no useful lexical overlap. Retrieval correctness only; no LLM, semantic embedding model, or external benchmark.</desc>
+<rect width="1038" height="302" rx="12" fill="#ffffff"/>
+<text x="24" y="34" font-size="17" font-weight="600" fill="#24392f">Retrieval strategies on the synthetic workload</text>
+<text x="24" y="54" font-size="12" fill="#6b7a70">22 hand-authored queries · 16 memories · three-record budget</text>
+<text x="190" y="80" font-size="12.5" font-weight="600" fill="#24392f">Recall@3</text>
+<text x="190" y="95" font-size="11" fill="#6b7a70">higher is better</text>
+<line x1="190.0" y1="104" x2="190.0" y2="238" stroke="#e3e7df" stroke-width="1"/>
+<text x="190.0" y="254" font-size="10" fill="#6b7a70" text-anchor="middle">0%</text>
+<line x1="265.0" y1="104" x2="265.0" y2="238" stroke="#e3e7df" stroke-width="1"/>
+<text x="265.0" y="254" font-size="10" fill="#6b7a70" text-anchor="middle">50%</text>
+<line x1="340.0" y1="104" x2="340.0" y2="238" stroke="#e3e7df" stroke-width="1"/>
+<text x="340.0" y="254" font-size="10" fill="#6b7a70" text-anchor="middle">100%</text>
+<rect x="190" y="114" width="133.3" height="14" rx="3" fill="#294e3c"><title>Hybrid · temporal: 88.9% recall@3</title></rect>
+<text x="329.3" y="125" font-size="11" fill="#24392f">89%</text>
+<rect x="190" y="140" width="133.3" height="14" rx="3" fill="#294e3c"><title>Lexical · temporal: 88.9% recall@3</title></rect>
+<text x="329.3" y="151" font-size="11" fill="#24392f">89%</text>
+<rect x="190" y="166" width="133.3" height="14" rx="3" fill="#294e3c"><title>Feature hash · temporal: 88.9% recall@3</title></rect>
+<text x="329.3" y="177" font-size="11" fill="#24392f">89%</text>
+<rect x="190" y="192" width="75.0" height="14" rx="3" fill="#294e3c"><title>Recent context · temporal: 50.0% recall@3</title></rect>
+<text x="271.0" y="203" font-size="11" fill="#24392f">50%</text>
+<rect x="190" y="218" width="133.3" height="14" rx="3" fill="#294e3c"><title>Keyword · time-blind: 88.9% recall@3</title></rect>
+<text x="329.3" y="229" font-size="11" fill="#24392f">89%</text>
+<text x="396" y="80" font-size="12.5" font-weight="600" fill="#24392f">Top-1 accuracy</text>
+<text x="396" y="95" font-size="11" fill="#6b7a70">higher is better</text>
+<line x1="396.0" y1="104" x2="396.0" y2="238" stroke="#e3e7df" stroke-width="1"/>
+<text x="396.0" y="254" font-size="10" fill="#6b7a70" text-anchor="middle">0%</text>
+<line x1="471.0" y1="104" x2="471.0" y2="238" stroke="#e3e7df" stroke-width="1"/>
+<text x="471.0" y="254" font-size="10" fill="#6b7a70" text-anchor="middle">50%</text>
+<line x1="546.0" y1="104" x2="546.0" y2="238" stroke="#e3e7df" stroke-width="1"/>
+<text x="546.0" y="254" font-size="10" fill="#6b7a70" text-anchor="middle">100%</text>
+<rect x="396" y="114" width="133.3" height="14" rx="3" fill="#294e3c"><title>Hybrid · temporal: 88.9% top-1 accuracy</title></rect>
+<text x="535.3" y="125" font-size="11" fill="#24392f">89%</text>
+<rect x="396" y="140" width="133.3" height="14" rx="3" fill="#294e3c"><title>Lexical · temporal: 88.9% top-1 accuracy</title></rect>
+<text x="535.3" y="151" font-size="11" fill="#24392f">89%</text>
+<rect x="396" y="166" width="133.3" height="14" rx="3" fill="#294e3c"><title>Feature hash · temporal: 88.9% top-1 accuracy</title></rect>
+<text x="535.3" y="177" font-size="11" fill="#24392f">89%</text>
+<rect x="396" y="192" width="58.3" height="14" rx="3" fill="#294e3c"><title>Recent context · temporal: 38.9% top-1 accuracy</title></rect>
+<text x="460.3" y="203" font-size="11" fill="#24392f">39%</text>
+<rect x="396" y="218" width="91.7" height="14" rx="3" fill="#294e3c"><title>Keyword · time-blind: 61.1% top-1 accuracy</title></rect>
+<text x="493.7" y="229" font-size="11" fill="#24392f">61%</text>
+<text x="602" y="80" font-size="12.5" font-weight="600" fill="#24392f">Unknown-query abstention</text>
+<text x="602" y="95" font-size="11" fill="#6b7a70">higher is better</text>
+<line x1="602.0" y1="104" x2="602.0" y2="238" stroke="#e3e7df" stroke-width="1"/>
+<text x="602.0" y="254" font-size="10" fill="#6b7a70" text-anchor="middle">0%</text>
+<line x1="677.0" y1="104" x2="677.0" y2="238" stroke="#e3e7df" stroke-width="1"/>
+<text x="677.0" y="254" font-size="10" fill="#6b7a70" text-anchor="middle">50%</text>
+<line x1="752.0" y1="104" x2="752.0" y2="238" stroke="#e3e7df" stroke-width="1"/>
+<text x="752.0" y="254" font-size="10" fill="#6b7a70" text-anchor="middle">100%</text>
+<rect x="602" y="114" width="150.0" height="14" rx="3" fill="#294e3c"><title>Hybrid · temporal: 100.0% unknown-query abstention</title></rect>
+<text x="758.0" y="125" font-size="11" fill="#24392f">100%</text>
+<rect x="602" y="140" width="150.0" height="14" rx="3" fill="#294e3c"><title>Lexical · temporal: 100.0% unknown-query abstention</title></rect>
+<text x="758.0" y="151" font-size="11" fill="#24392f">100%</text>
+<rect x="602" y="166" width="150.0" height="14" rx="3" fill="#294e3c"><title>Feature hash · temporal: 100.0% unknown-query abstention</title></rect>
+<text x="758.0" y="177" font-size="11" fill="#24392f">100%</text>
+<text x="608.0" y="203" font-size="11" fill="#24392f">0%</text>
+<rect x="602" y="218" width="75.0" height="14" rx="3" fill="#294e3c"><title>Keyword · time-blind: 50.0% unknown-query abstention</title></rect>
+<text x="683.0" y="229" font-size="11" fill="#24392f">50%</text>
+<text x="808" y="80" font-size="12.5" font-weight="600" fill="#24392f">Invalid-time hits</text>
+<text x="808" y="95" font-size="11" fill="#6b7a70">lower is better</text>
+<line x1="808.0" y1="104" x2="808.0" y2="238" stroke="#e3e7df" stroke-width="1"/>
+<text x="808.0" y="254" font-size="10" fill="#6b7a70" text-anchor="middle">0%</text>
+<line x1="883.0" y1="104" x2="883.0" y2="238" stroke="#e3e7df" stroke-width="1"/>
+<text x="883.0" y="254" font-size="10" fill="#6b7a70" text-anchor="middle">50%</text>
+<line x1="958.0" y1="104" x2="958.0" y2="238" stroke="#e3e7df" stroke-width="1"/>
+<text x="958.0" y="254" font-size="10" fill="#6b7a70" text-anchor="middle">100%</text>
+<text x="814.0" y="125" font-size="11" fill="#24392f">0%</text>
+<text x="814.0" y="151" font-size="11" fill="#24392f">0%</text>
+<text x="814.0" y="177" font-size="11" fill="#24392f">0%</text>
+<text x="814.0" y="203" font-size="11" fill="#24392f">0%</text>
+<rect x="808" y="218" width="72.9" height="14" rx="3" fill="#294e3c"><title>Keyword · time-blind: 48.6% invalid-time hits</title></rect>
+<text x="886.9" y="229" font-size="11" fill="#24392f">49%</text>
+<text x="24" y="125" font-size="12" fill="#24392f">Hybrid · temporal</text>
+<text x="24" y="151" font-size="12" fill="#24392f">Lexical · temporal</text>
+<text x="24" y="177" font-size="12" fill="#24392f">Feature hash · temporal</text>
+<text x="24" y="203" font-size="12" fill="#24392f">Recent context · temporal</text>
+<text x="24" y="229" font-size="12" fill="#24392f">Keyword · time-blind</text>
+<text x="24" y="284" font-size="10.5" fill="#6b7a70">Small deterministic regression fixtures, not a general quality claim. Recall and top-1 use 18 answerable queries; abstention uses 4 unanswerable ones.</text>
+</svg>
